@@ -124,7 +124,6 @@ namespace Microsoft.Bot.Builder
             {
                 var activity = activities[index];
                 var response = default(ResourceResponse);
-
                 _logger.LogInformation($"Sending activity.  ReplyToId: {activity.ReplyToId}");
 
                 if (activity.Type == ActivityTypesEx.Delay)
@@ -146,21 +145,15 @@ namespace Microsoft.Bot.Builder
                 {
                     // if it is a Trace activity we only send to the channel if it's the emulator.
                 }
-                else if (!string.IsNullOrWhiteSpace(activity.ReplyToId) && _connections.ContainsKey(activity.Conversation.Id))
+                else if (_connections.ContainsKey(activity.Conversation.Id))
                 {
                     _connections.TryGetValue(activity.Conversation.Id, out var connection);
-                    
-                    //var requestContent = Rest.Serialization.SafeJsonConvert.SerializeObject(activity, Protocol.SerializationSettings.DefaultSerializationSettings);
-                    //var request = Bot.Protocol.Request.CreatePost("path goes here", new StringContent(requestContent, System.Text.Encoding.UTF8));
+                    // var requestContent = Rest.Serialization.SafeJsonConvert.SerializeObject(activity, Protocol.SerializationSettings.DefaultSerializationSettings);
+                    // var request = Bot.Protocol.Request.CreatePost("path goes here", new StringContent(requestContent, System.Text.Encoding.UTF8));
+                    // response = await connection.SendAsync(request).ConfigureAwait(false);
 
-                    //response = await connection.SendAsync(request).ConfigureAwait(false);
-
-                    response = await connection.SendAsync(Protocol.Request.CreateRequest(Protocol.Request.POST, activity));
-                }
-                else
-                {
-                    var connectorClient = turnContext.TurnState.Get<IConnectorClient>();
-                    response = await connectorClient.Conversations.SendToConversationAsync(activity, cancellationToken).ConfigureAwait(false);
+                    var realResponse = await connection.SendAsync(Protocol.Request.CreateRequest(Protocol.Request.POST, activity)).ConfigureAwait(false);
+                    response = new ResourceResponse(activity.Id ?? string.Empty);
                 }
 
                 // If No response is set, then defult to a "simple" response. This can't really be done
