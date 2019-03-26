@@ -24,7 +24,6 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
         private readonly HttpClient _httpClient;
         private readonly ILogger _logger;
         private WebSocketServer server;
-        private ConcurrentDictionary<string, WebSocketServer> _connections = new ConcurrentDictionary<string, WebSocketServer>();
 
         public BotFrameworkStreamingExtensionsAdapter(
             HttpClient customHttpClient = null,
@@ -40,10 +39,6 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
             {
                 Use(middleware);
             }
-        }
-
-        public BotFrameworkStreamingExtensionsAdapter(ICredentialProvider credentialProvider, IChannelProvider channelProvider, object p1, object p2, object p3, ILogger<BotFrameworkWebSocketAdapter> logger)
-        {
         }
 
         public new BotFrameworkStreamingExtensionsAdapter Use(IMiddleware middleware)
@@ -150,15 +145,12 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
                 {
                     // if it is a Trace activity we only send to the channel if it's the emulator.
                 }
-                else if (_connections.ContainsKey(activity.Conversation.Id))
-                {
-                    _connections.TryGetValue(activity.Conversation.Id, out var connection);
-                    var baseUrl = activity.ServiceUrl + (activity.ServiceUrl.EndsWith("/") ? string.Empty : "/");
-                    var requestPath = $"{baseUrl}v3/conversations/{activity.Conversation.Id}/activities/{activity.Id}";
-                    var requestBody = JsonConvert.SerializeObject(activity, SerializationSettings.BotSchemaSerializationSettings);
-                    var serverResponse = await connection.SendAsync(Request.CreateRequest(Request.POST, requestPath, new StringContent(requestBody, System.Text.Encoding.UTF8))).ConfigureAwait(false);
-                    response = serverResponse.ReadBodyAsJson<ResourceResponse>();
-                }
+
+                var baseUrl = activity.ServiceUrl + (activity.ServiceUrl.EndsWith("/") ? string.Empty : "/");
+                var requestPath = $"{baseUrl}v3/conversations/{activity.Conversation.Id}/activities/{activity.Id}";
+                var requestBody = JsonConvert.SerializeObject(activity, SerializationSettings.BotSchemaSerializationSettings);
+                var serverResponse = await server.SendAsync(Request.CreateRequest(Request.POST, requestPath, new StringContent(requestBody, System.Text.Encoding.UTF8))).ConfigureAwait(false);
+                response = serverResponse.ReadBodyAsJson<ResourceResponse>();
 
                 // If No response is set, then defult to a "simple" response. This can't really be done
                 // above, as there are cases where the ReplyTo/SendTo methods will also return null
