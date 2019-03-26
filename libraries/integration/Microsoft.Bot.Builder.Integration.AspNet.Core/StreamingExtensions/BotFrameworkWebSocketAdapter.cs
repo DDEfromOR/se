@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Bot.Connector.Authentication;
+using Microsoft.Bot.Protocol.Utilities;
 using Microsoft.Bot.Protocol.WebSockets;
 using Microsoft.Extensions.Logging;
 
@@ -29,7 +30,7 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
         public ConcurrentDictionary<string, WebSocketServer> Connections { get; set; }
 
         public async Task ProcessAsync(HttpRequest httpRequest, HttpResponse httpResponse, IBot bot, CancellationToken cancellationToken = default(CancellationToken))
-        {
+         {
             if (httpRequest == null)
             {
                 throw new ArgumentNullException(nameof(httpRequest));
@@ -47,12 +48,20 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
 
             var authHeader = httpRequest.Headers["Authorization"];
             var channelId = httpRequest.Headers["ChannelId"];
-            var claimsIdentity = await JwtTokenValidation.ValidateAuthHeader(authHeader, _credentialProvider, _channelProvider, channelId).ConfigureAwait(false);
-            if (!claimsIdentity.IsAuthenticated)
-            {
-                httpRequest.HttpContext.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                return;
-            }
+            //try
+            //{
+            //    var claimsIdentity = await JwtTokenValidation.ValidateAuthHeader(authHeader, _credentialProvider, _channelProvider, channelId).ConfigureAwait(false);
+            //    if (!claimsIdentity.IsAuthenticated)
+            //    {
+            //        httpRequest.HttpContext.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+            //        return;
+            //    }
+            //}
+            //catch (Exception)
+            //{
+            //    httpRequest.HttpContext.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+            //    return;
+            //}
 
             if (!httpRequest.HttpContext.WebSockets.IsWebSocketRequest)
             {
@@ -67,7 +76,6 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
         public async Task CreateWebSocketConnectionAsync(HttpContext httpContext, string authHeader, string channelId, IBot bot)
         {
             var socket = await httpContext.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
-            var claimsIdentity = await JwtTokenValidation.ValidateAuthHeader(authHeader, _credentialProvider, _channelProvider, channelId).ConfigureAwait(false);
             var server = new WebSocketServer(socket, new StreamingExtensionRequestHandler(new BotFrameworkStreamingExtensionsAdapter(), bot));
 
             try
@@ -79,6 +87,11 @@ namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
                 httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 return;
             }
+
+            var startListening = server.StartAsync();
+            Task.WaitAll(startListening);
+
+            httpContext.Response.StatusCode = (int)HttpStatusCode.SwitchingProtocols;
         }
     }
 }
