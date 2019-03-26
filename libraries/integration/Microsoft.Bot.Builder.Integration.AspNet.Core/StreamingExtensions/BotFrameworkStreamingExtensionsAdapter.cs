@@ -3,42 +3,47 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
-using System.Net.WebSockets;
-using System.Security.Claims;
-using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Bot.Connector;
 using Microsoft.Bot.Connector.Authentication;
+using Microsoft.Bot.Protocol;
 using Microsoft.Bot.Protocol.WebSockets;
 using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Newtonsoft.Json;
 
-namespace Microsoft.Bot.Builder
+namespace Microsoft.Bot.Builder.Integration.AspNet.Core.StreamingExtensions
 {
     public class BotFrameworkStreamingExtensionsAdapter : BotAdapter
     {
         private const string InvokeReponseKey = "BotFrameworkAdapter.InvokeResponse";
-        private readonly IChannelProvider _channelProvider;
+        private static readonly HttpClient DefaultHttpClient = new HttpClient();
+        private readonly HttpClient _httpClient;
         private readonly ILogger _logger;
+        private WebSocketServer server;
         private ConcurrentDictionary<string, WebSocketServer> _connections = new ConcurrentDictionary<string, WebSocketServer>();
 
         public BotFrameworkStreamingExtensionsAdapter(
-            IChannelProvider channelProvider = null,
+            HttpClient customHttpClient = null,
+            WebSocketServer webSocketServer = null,
             IMiddleware middleware = null,
             ILogger logger = null)
         {
-            _channelProvider = channelProvider;
             _logger = logger ?? NullLogger.Instance;
+            _httpClient = customHttpClient ?? DefaultHttpClient;
+            server = webSocketServer;
 
             if (middleware != null)
             {
                 Use(middleware);
             }
+        }
+
+        public BotFrameworkStreamingExtensionsAdapter(ICredentialProvider credentialProvider, IChannelProvider channelProvider, object p1, object p2, object p3, ILogger<BotFrameworkWebSocketAdapter> logger)
+        {
         }
 
         public new BotFrameworkStreamingExtensionsAdapter Use(IMiddleware middleware)
@@ -130,7 +135,7 @@ namespace Microsoft.Bot.Builder
                 {
                     // The Activity Schema doesn't have a delay type build in, so it's simulated
                     // here in the Bot. This matches the behavior in the Node connector.
-                    int delayMs = (int)activity.Value;
+                    var delayMs = (int)activity.Value;
                     await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
 
                     // No need to create a response. One will be created below.
@@ -148,12 +153,11 @@ namespace Microsoft.Bot.Builder
                 else if (_connections.ContainsKey(activity.Conversation.Id))
                 {
                     _connections.TryGetValue(activity.Conversation.Id, out var connection);
-                    // var requestContent = Rest.Serialization.SafeJsonConvert.SerializeObject(activity, Protocol.SerializationSettings.DefaultSerializationSettings);
-                    // var request = Bot.Protocol.Request.CreatePost("path goes here", new StringContent(requestContent, System.Text.Encoding.UTF8));
-                    // response = await connection.SendAsync(request).ConfigureAwait(false);
-
-                    var realResponse = await connection.SendAsync(Protocol.Request.CreateRequest(Protocol.Request.POST, activity)).ConfigureAwait(false);
-                    response = new ResourceResponse(activity.Id ?? string.Empty);
+                    var baseUrl = activity.ServiceUrl + (activity.ServiceUrl.EndsWith("/") ? string.Empty : "/");
+                    var requestPath = $"{baseUrl}v3/conversations/{activity.Conversation.Id}/activities/{activity.Id}";
+                    var requestBody = JsonConvert.SerializeObject(activity, SerializationSettings.BotSchemaSerializationSettings);
+                    var serverResponse = await connection.SendAsync(Request.CreateRequest(Request.POST, requestPath, new StringContent(requestBody, System.Text.Encoding.UTF8))).ConfigureAwait(false);
+                    response = serverResponse.ReadBodyAsJson<ResourceResponse>();
                 }
 
                 // If No response is set, then defult to a "simple" response. This can't really be done
@@ -176,14 +180,8 @@ namespace Microsoft.Bot.Builder
             return responses;
         }
 
-        public override Task<ResourceResponse> UpdateActivityAsync(ITurnContext turnContext, Activity activity, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
+        public override Task<ResourceResponse> UpdateActivityAsync(ITurnContext turnContext, Activity activity, CancellationToken cancellationToken) => throw new NotImplementedException();
 
-        public override Task DeleteActivityAsync(ITurnContext turnContext, ConversationReference reference, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
+        public override Task DeleteActivityAsync(ITurnContext turnContext, ConversationReference reference, CancellationToken cancellationToken) => throw new NotImplementedException();
     }
 }
