@@ -2,12 +2,10 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Bot.Connector.Authentication;
 using Microsoft.Bot.Protocol;
 using Microsoft.Bot.Protocol.WebSockets;
 using Microsoft.Bot.Schema;
